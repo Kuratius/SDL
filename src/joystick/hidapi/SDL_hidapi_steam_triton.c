@@ -137,6 +137,21 @@ static bool DisableSteamTritonLizardMode(SDL_hid_device *dev)
     return true;
 }
 
+static float FilterTouch(float newValue, float oldValue)
+{
+    const float jitter = 256.0f / (1 << 16);
+    if (newValue > (oldValue - jitter * 0.5f) && newValue < (oldValue + jitter * 0.5f)) {
+        return oldValue;
+    }
+    if (newValue > (oldValue - jitter) && newValue < (oldValue + jitter)) {
+        return oldValue * 0.75f + newValue * 0.25f;
+    }
+    if (newValue > (oldValue - jitter * 2.0f) && newValue < (oldValue + jitter * 2.0f)) {
+        return (oldValue + newValue) * 0.5f;
+    }
+    return newValue;
+}
+
 static void HIDAPI_DriverSteamTriton_HandleState(SDL_HIDAPI_Device *device,
                                                SDL_Joystick *joystick,
                                                TritonMTUNoQuat_t *pTritonReport)
@@ -254,8 +269,10 @@ static void HIDAPI_DriverSteamTriton_HandleState(SDL_HIDAPI_Device *device,
     bool right_touch_down = (pTritonReport->buttons & TRITON_RIGHT_TOUCHPAD_TOUCH) ? true : false;
     if (left_touch_down || ctx->left_touch_down) {
         if (left_touch_down) {
-            ctx->left_touch_x = pTritonReport->sLeftPadX / 65536.0f + 0.5f;
-            ctx->left_touch_y = -(float)pTritonReport->sLeftPadY / 65536.0f + 0.5f;
+            const float left_touch_x = pTritonReport->sLeftPadX / 65536.0f + 0.5f;
+            ctx->left_touch_x = FilterTouch(left_touch_x, ctx->left_touch_x);
+            const float left_touch_y = -(float)pTritonReport->sLeftPadY / 65536.0f + 0.5f;
+            ctx->left_touch_y = FilterTouch(left_touch_y, ctx->left_touch_y);
 
         }
         SDL_SendJoystickTouchpad(timestamp, joystick, 0, 0,
@@ -267,8 +284,10 @@ static void HIDAPI_DriverSteamTriton_HandleState(SDL_HIDAPI_Device *device,
     }
     if (right_touch_down || ctx->right_touch_down) {
         if (right_touch_down) {
-            ctx->right_touch_x = pTritonReport->sRightPadX / 65536.0f + 0.5f;
-            ctx->right_touch_y = -(float)pTritonReport->sRightPadY / 65536.0f + 0.5f;
+            const float right_touch_x = pTritonReport->sRightPadX / 65536.0f + 0.5f;
+            ctx->right_touch_x = FilterTouch(right_touch_x, ctx->right_touch_x);
+            const float right_touch_y = -(float)pTritonReport->sRightPadY / 65536.0f + 0.5f;
+            ctx->right_touch_y = FilterTouch(right_touch_y, ctx->right_touch_y);
         }
         SDL_SendJoystickTouchpad(timestamp, joystick, 1, 0,
                                  right_touch_down,
